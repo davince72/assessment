@@ -2,10 +2,16 @@ package com.davince.controller;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.context.annotation.Bean;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
@@ -13,12 +19,16 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
 
 import com.davince.model.Account;
 import com.davince.model.AccountRepository;
 import com.davince.model.AccountUI;
+import com.davince.model.Inventory;
+import com.davince.model.InventoryRepository;
 import com.davince.model.TranLogRepository;
 import com.davince.model.TransactionLog;
+import com.davince.rest.Root;
 
 @RestController
 public class AccountController {
@@ -28,6 +38,24 @@ public class AccountController {
 	AccountRepository accountRepository;
 	@Autowired
 	TranLogRepository tranlogRepository;
+	@Autowired
+	InventoryRepository inventoryRepository;
+	
+    @Bean
+	public RestTemplate restTemplate(RestTemplateBuilder builder) {
+		return builder.build();
+	}
+
+//	@Bean
+//	public CommandLineRunner run(RestTemplate restTemplate) throws Exception {
+//		return args -> {
+//
+//			ResponseEntity<Root[]> response = restTemplate.getForEntity(
+//					"https://blox.weareblox.com/api/markets", Root[].class);
+//			Root[] prices = response.getBody();
+////			log.info(Arrays.toString(prices));
+//		};
+//	}	
 	
 	@GetMapping("/createaccount")
 	public String create() {
@@ -116,5 +144,64 @@ public class AccountController {
 		return accountRepository.save(account).toString();
 	}
 
-	
+	// bg1.compareTo(bg2) 
+	// 0 = equal; 1 bg1>bg2 ;  -1 bg1<bg2
+	@RequestMapping("/buyBTC/{amount}")
+	public String buyBTC(@PathVariable long amount) {
+		Account account = accountRepository.findByUser(getUsername());
+		if (account == null) { 
+			// create account first...login is taken care off
+			account = accountRepository.save(new Account(getUsername()));
+		}
+		RestTemplate restTemplate = new RestTemplate();
+		ResponseEntity<Root[]> response = restTemplate.getForEntity(
+				"https://blox.weareblox.com/api/markets", Root[].class);
+		Root[] prices = response.getBody();
+		// Determine price
+		Root BTC= prices[0];	// a bit dirty..assume we have results
+		// calculate commision
+		//		=> using the sellPrice? does that include the commission?
+		// enough cash?
+		BigDecimal coinsNeeded = BigDecimal.valueOf(amount);
+		BigDecimal moneyNeeded = coinsNeeded.multiply(BigDecimal.valueOf(BTC.sellPrice.amount));
+		if (moneyNeeded.compareTo(account.getCash()) == 1) {
+			// Not enough cash
+			return "Sorry you don't have enough money";
+		} else {
+			// claim needed money asap
+			account.setCash(account.getCash().subtract(moneyNeeded));			
+		}
+
+		// if yes, go for it
+		//		inventory is sufficient?
+		Optional<Inventory> inventoryOptional = inventoryRepository.findById(1L);
+		if (inventoryOptional.isEmpty()) throw new IllegalStateException("Inventory not present or set!");
+		BigDecimal amountFromInventory = coinsNeeded;
+		BigDecimal amountFromExchange = BigDecimal.ZERO;
+		Inventory inventory = inventoryOptional.get();
+		if (inventory.getAmount().compareTo(coinsNeeded) == -1) {
+			// inventory not enough....
+			amountFromInventory = inventory.getAmount(); // Use what's left in inventory
+			inventory.setAmount(BigDecimal.ZERO); // All gone / sold out (again!)
+
+			// TODO Refill Inventory
+			//		get rest of exchange
+			amountFromExchange = coinsNeeded.subtract(amountFromInventory);
+			TransactionLog tranlog = new TransactionLog(account, TransactionLog.ACTION_BUY , amountFromExchange , TransactionLog.SOURCE_EXCHANGE);
+			tranlogRepository.save(tranlog);
+		} else {
+			inventory.setAmount(inventory.getAmount().subtract(coinsNeeded)); 
+		}
+		inventoryRepository.save(inventory);
+		// create transaction log
+		TransactionLog tranlog = new TransactionLog(account, TransactionLog.ACTION_BUY , amountFromInventory , TransactionLog.SOURCE_STOCK);
+		tranlogRepository.save(tranlog);
+		account.setCrypto(account.getCrypto().add(coinsNeeded)); // Nieuwe cryptos toevoegen aan account
+		
+		// ready
+		accountRepository.save(account);
+		return "Your new coins are added to your account";
+
+		//		return null;
+	}
 }
