@@ -153,17 +153,12 @@ public class AccountController {
 			// create account first...login is taken care off
 			account = accountRepository.save(new Account(getUsername()));
 		}
-		RestTemplate restTemplate = new RestTemplate();
-		ResponseEntity<Root[]> response = restTemplate.getForEntity(
-				"https://blox.weareblox.com/api/markets", Root[].class);
-		Root[] prices = response.getBody();
-		// Determine price
-		Root BTC= prices[0];	// a bit dirty..assume we have results
+		Root BTC = getBTCPrice();
 		// calculate commision
 		//		=> using the sellPrice? does that include the commission?
 		// enough cash?
 		BigDecimal coinsNeeded = BigDecimal.valueOf(amount);
-		BigDecimal moneyNeeded = coinsNeeded.multiply(BigDecimal.valueOf(BTC.sellPrice.amount));
+		BigDecimal moneyNeeded = coinsNeeded.multiply(BigDecimal.valueOf(BTC.price.amount)); // commission?
 		if (moneyNeeded.compareTo(account.getCash()) == 1) {
 			// Not enough cash
 			return "Sorry you don't have enough money";
@@ -203,5 +198,15 @@ public class AccountController {
 		return "Your new coins are added to your account";
 
 		//		return null;
+	}
+
+	private Root getBTCPrice() {
+		RestTemplate restTemplate = new RestTemplate();
+		ResponseEntity<Root[]> response = restTemplate.getForEntity(
+				"https://blox.weareblox.com/api/markets", Root[].class);
+		Root[] prices = response.getBody();
+		// Determine price
+		Root BTC= prices[0];	// a bit dirty..assume we have results
+		return BTC;
 	}
 }
