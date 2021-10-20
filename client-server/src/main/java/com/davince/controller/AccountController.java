@@ -1,13 +1,10 @@
 package com.davince.controller;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -23,7 +20,6 @@ import org.springframework.web.client.RestTemplate;
 
 import com.davince.model.Account;
 import com.davince.model.AccountRepository;
-import com.davince.model.AccountUI;
 import com.davince.model.Inventory;
 import com.davince.model.InventoryRepository;
 import com.davince.model.TranLogRepository;
@@ -33,30 +29,19 @@ import com.davince.rest.Root;
 @RestController
 public class AccountController {
 	private static String CRLF = "\r\n";
-	
+
 	@Autowired
 	AccountRepository accountRepository;
 	@Autowired
 	TranLogRepository tranlogRepository;
 	@Autowired
 	InventoryRepository inventoryRepository;
-	
-    @Bean
+
+	@Bean
 	public RestTemplate restTemplate(RestTemplateBuilder builder) {
 		return builder.build();
 	}
 
-//	@Bean
-//	public CommandLineRunner run(RestTemplate restTemplate) throws Exception {
-//		return args -> {
-//
-//			ResponseEntity<Root[]> response = restTemplate.getForEntity(
-//					"https://blox.weareblox.com/api/markets", Root[].class);
-//			Root[] prices = response.getBody();
-////			log.info(Arrays.toString(prices));
-//		};
-//	}	
-	
 	@GetMapping("/createaccount")
 	public String create() {
 		// save a single Account
@@ -70,92 +55,82 @@ public class AccountController {
 	}
 
 	@GetMapping("/findallaccounts")
-	public List<AccountUI> findAll() {
+	public List<Account> findAll() {
 
 		List<Account> accounts = accountRepository.findAll();
-		List<AccountUI> accountUI = new ArrayList<>();
-
-		for (Account account : accounts) {
-			accountUI.add(new AccountUI(account.getUser(), account.getCash(), account.getCrypto()));
-		}
-
-		return accountUI;
+		return accounts;
 	}
 
 	@RequestMapping("/account/{id}")
-	public String search(@PathVariable long id) {
-		String account = "";
-		account = accountRepository.findById(id).toString();
-		return account;
+	public Account search(@PathVariable long id) {
+		return accountRepository.findById(id).orElse(null);
 	}
-	
+
 	@RequestMapping("/searchbyuser/{user}")
-	public List<AccountUI> fetchDataByUser(@PathVariable String user) {
+	public Account fetchDataByUser(@PathVariable String user) {
 
 		Account account = accountRepository.findByUser(user);
-		List<AccountUI> accountUI = new ArrayList<>();
-
-		accountUI.add(new AccountUI(account.getUser(), account.getCash(), account.getCrypto()));
-
-		return accountUI;
+		return account;
 	}
 
 	@GetMapping("/info")
 	public String info() {
 
-		Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-		String username;
-		if (principal instanceof UserDetails) {
-			username = ((UserDetails) principal).getUsername();
-		} else {
-			// Principal is in dit geval van type: DefaultOidcUser
-			DefaultOidcUser user = (DefaultOidcUser) principal;
-			username = user.getName();
-			// username = principal.toString();
-			// Name: [admin], Granted Authorities: [[ROLE_USER, SCOPE_openid]], User
-			// Attributes: [{sub=admin, aud=[articles-client], azp=articles-client,
-			// iss=http://auth-server:9000, exp=2021-10-17T15:28:29Z,
-			// iat=2021-10-17T14:58:29Z, nonce=SqEynmKT26xyGPOZselUEc7BPiU5lp7MLZMLgHTnXio}]
-		}
+		String username = getUsername();
 		StringBuilder sb = new StringBuilder();
 		sb.append(username).append(CRLF);
 		List<TransactionLog> findAll = tranlogRepository.findByAccount(accountRepository.findByUser(username));
 		findAll.stream().forEach(t -> sb.append(t).append(CRLF));
 		return sb.toString();
 	}
+	@GetMapping("/tranlog")
+	public List<TransactionLog>  tranlog() {
 
-	public String getUsername() {
+		String username = getUsername();
+		List<TransactionLog> findAll = tranlogRepository.findByAccount(accountRepository.findByUser(username));
+		return findAll;
+	}
+
+	private String getUsername() {
 		Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-		DefaultOidcUser user = (DefaultOidcUser) principal;
-		return user.getName();
+		String username;
+		if (principal instanceof UserDetails) {
+			// tbv test wel makkelijk
+			username = ((UserDetails) principal).getUsername();
+		} else {
+			// Principal is in dit geval van type: DefaultOidcUser
+			DefaultOidcUser user = (DefaultOidcUser) principal;
+			username = user.getName();
+		}
+		return username;
 	}
 
 	@RequestMapping("/addcash/{money}")
-	public String addcash(@PathVariable long money) {
+	public Account addcash(@PathVariable long money) {
 		Account account = accountRepository.findByUser(getUsername());
-		if (account == null) { 
+		if (account == null) {
 			// create account first...login is taken care off
 			account = accountRepository.save(new Account(getUsername()));
 		}
 		BigDecimal moneyToAdd = new BigDecimal(money);
 		account.setCash(account.getCash().add(moneyToAdd));
-		TransactionLog tranlog = new TransactionLog(account, TransactionLog.ACTION_DEPOSIT , moneyToAdd , null);
+		TransactionLog tranlog = new TransactionLog(account, TransactionLog.ACTION_DEPOSIT, moneyToAdd, null);
 		tranlogRepository.save(tranlog);
-		return accountRepository.save(account).toString();
+		return accountRepository.save(account);
 	}
 
-	// bg1.compareTo(bg2) 
-	// 0 = equal; 1 bg1>bg2 ;  -1 bg1<bg2
+	// bg1.compareTo(bg2)
+	// 0 = equal; 1 bg1>bg2 ; -1 bg1<bg2
 	@RequestMapping("/buyBTC/{amount}")
 	public String buyBTC(@PathVariable long amount) {
 		Account account = accountRepository.findByUser(getUsername());
-		if (account == null) { 
+		if (account == null) {
 			// create account first...login is taken care off
 			account = accountRepository.save(new Account(getUsername()));
 		}
 		Root BTC = getBTCPrice();
 		// calculate commision
-		//		=> using the sellPrice? does that include the commission?
+		// => using the sellPrice? does that include the commission?
 		// enough cash?
 		BigDecimal coinsNeeded = BigDecimal.valueOf(amount);
 		BigDecimal moneyNeeded = coinsNeeded.multiply(BigDecimal.valueOf(BTC.price.amount)); // commission?
@@ -164,13 +139,14 @@ public class AccountController {
 			return "Sorry you don't have enough money";
 		} else {
 			// claim needed money asap
-			account.setCash(account.getCash().subtract(moneyNeeded));			
+			account.setCash(account.getCash().subtract(moneyNeeded));
 		}
 
 		// if yes, go for it
-		//		inventory is sufficient?
+		// inventory is sufficient?
 		Optional<Inventory> inventoryOptional = inventoryRepository.findById(1L);
-		if (inventoryOptional.isEmpty()) throw new IllegalStateException("Inventory not present or set!");
+		if (inventoryOptional.isEmpty())
+			throw new IllegalStateException("Inventory not present or set!");
 		BigDecimal amountFromInventory = coinsNeeded;
 		BigDecimal amountFromExchange = BigDecimal.ZERO;
 		Inventory inventory = inventoryOptional.get();
@@ -180,33 +156,35 @@ public class AccountController {
 			inventory.setAmount(BigDecimal.ZERO); // All gone / sold out (again!)
 
 			// TODO Refill Inventory
-			//		get rest of exchange
+			// get rest of exchange
 			amountFromExchange = coinsNeeded.subtract(amountFromInventory);
-			TransactionLog tranlog = new TransactionLog(account, TransactionLog.ACTION_BUY , amountFromExchange , TransactionLog.SOURCE_EXCHANGE);
+			TransactionLog tranlog = new TransactionLog(account, TransactionLog.ACTION_BUY, amountFromExchange,
+					TransactionLog.SOURCE_EXCHANGE);
 			tranlogRepository.save(tranlog);
 		} else {
-			inventory.setAmount(inventory.getAmount().subtract(coinsNeeded)); 
+			inventory.setAmount(inventory.getAmount().subtract(coinsNeeded));
 		}
 		inventoryRepository.save(inventory);
 		// create transaction log
-		TransactionLog tranlog = new TransactionLog(account, TransactionLog.ACTION_BUY , amountFromInventory , TransactionLog.SOURCE_STOCK);
+		TransactionLog tranlog = new TransactionLog(account, TransactionLog.ACTION_BUY, amountFromInventory,
+				TransactionLog.SOURCE_STOCK);
 		tranlogRepository.save(tranlog);
 		account.setCrypto(account.getCrypto().add(coinsNeeded)); // Nieuwe cryptos toevoegen aan account
-		
+
 		// ready
 		accountRepository.save(account);
 		return "Your new coins are added to your account";
 
-		//		return null;
+		// return null;
 	}
 
-	private Root getBTCPrice() {
+	public Root getBTCPrice() {
 		RestTemplate restTemplate = new RestTemplate();
-		ResponseEntity<Root[]> response = restTemplate.getForEntity(
-				"https://blox.weareblox.com/api/markets", Root[].class);
+		ResponseEntity<Root[]> response = restTemplate.getForEntity("https://blox.weareblox.com/api/markets",
+				Root[].class);
 		Root[] prices = response.getBody();
 		// Determine price
-		Root BTC= prices[0];	// a bit dirty..assume we have results
+		Root BTC = prices[0]; // a bit dirty..assume we have results
 		return BTC;
 	}
 }

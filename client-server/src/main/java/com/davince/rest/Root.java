@@ -4,9 +4,15 @@ package com.davince.rest;
 /* ObjectMapper om = new ObjectMapper();
 Root root = om.readValue(myJsonString), Root.class); */
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class Root{
     public String shortName;
     public String name;

@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.springframework.security.oauth2: INFO
+
+spring:
+  jpa:
+    database: h2
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: true
+    hibernate:
+      ddl-auto: create-drop # validate
+      dialect: org.hibernate.dialect.H2Dialect
+  datasource:
+    url: jdbc:h2:mem:test
+    driver-class-name: org.h2.Driver
+security:
+  ignored: /**
