@@ -6,15 +6,12 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import com.davince.model.AccountRepository;
-import com.davince.model.CustomerRepository;
 import com.davince.model.TranLogRepository;
 
 
 @SpringBootApplication
 public class OAuth2ClientApplication {
 
-	@Autowired
-	CustomerRepository repository;
 	@Autowired
 	AccountRepository accountRepository;
 	@Autowired

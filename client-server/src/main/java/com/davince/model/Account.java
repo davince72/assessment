@@ -11,6 +11,9 @@ import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.Table;
 
+import lombok.Data;
+
+@Data
 @Entity
 @Table(name = "account")
 public class Account implements Serializable {
@@ -47,28 +50,28 @@ public class Account implements Serializable {
 	public String toString() {
 		return String.format("Account[id=%d, user='%s', cash='%s', crypto='%s']", id, user, currencyFormat(cash), cryptoFormat(crypto));
 	}
-	public String getUser() {
-        return user;
-    }
-    public void setUser(String user) {
-        this.user = user;
-    }
-    
-    public BigDecimal getCash() {
-		return cash;
-	}
-
-	public void setCash(BigDecimal cash) {
-		this.cash = cash;
-	}
-
-	public BigDecimal getCrypto() {
-		return crypto;
-	}
-
-	public void setCrypto(BigDecimal crypto) {
-		this.crypto = crypto;
-	}
+//	public String getUser() {
+//        return user;
+//    }
+//    public void setUser(String user) {
+//        this.user = user;
+//    }
+//    
+//    public BigDecimal getCash() {
+//		return cash;
+//	}
+//
+//	public void setCash(BigDecimal cash) {
+//		this.cash = cash;
+//	}
+//
+//	public BigDecimal getCrypto() {
+//		return crypto;
+//	}
+//
+//	public void setCrypto(BigDecimal crypto) {
+//		this.crypto = crypto;
+//	}
 
 	public String currencyFormat(BigDecimal n) {
         return NumberFormat.getCurrencyInstance().format(n);

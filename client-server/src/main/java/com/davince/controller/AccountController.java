@@ -129,8 +129,9 @@ public class AccountController {
 			account = accountRepository.save(new Account(getUsername()));
 		}
 		Root BTC = getBTCPrice();
-		// calculate commision
-		// => using the sellPrice? does that include the commission?
+		
+		// calculate commission
+
 		// enough cash?
 		BigDecimal coinsNeeded = BigDecimal.valueOf(amount);
 		BigDecimal moneyNeeded = coinsNeeded.multiply(BigDecimal.valueOf(BTC.price.amount)); // commission?
@@ -144,20 +145,23 @@ public class AccountController {
 
 		// if yes, go for it
 		// inventory is sufficient?
-		Optional<Inventory> inventoryOptional = inventoryRepository.findById(1L);
-		if (inventoryOptional.isEmpty())
-			throw new IllegalStateException("Inventory not present or set!");
+		List<Inventory> inventoryList = inventoryRepository.findAll();
+		if (inventoryList.isEmpty()) {
+			throw new IllegalStateException("Inventory not present or set!");	
+		}
 		BigDecimal amountFromInventory = coinsNeeded;
 		BigDecimal amountFromExchange = BigDecimal.ZERO;
-		Inventory inventory = inventoryOptional.get();
+		Inventory inventory = inventoryList.get(0);
 		if (inventory.getAmount().compareTo(coinsNeeded) == -1) {
 			// inventory not enough....
 			amountFromInventory = inventory.getAmount(); // Use what's left in inventory
 			inventory.setAmount(BigDecimal.ZERO); // All gone / sold out (again!)
 
 			// TODO Refill Inventory
-			// get rest of exchange
+			
+			// get rest of the exchange market
 			amountFromExchange = coinsNeeded.subtract(amountFromInventory);
+			buyFromExchange();
 			TransactionLog tranlog = new TransactionLog(account, TransactionLog.ACTION_BUY, amountFromExchange,
 					TransactionLog.SOURCE_EXCHANGE);
 			tranlogRepository.save(tranlog);
@@ -173,15 +177,20 @@ public class AccountController {
 
 		// ready
 		accountRepository.save(account);
-		return "Your new coins are added to your account";
 
-		// return null;
+		return "Your new coins are added to your account!";
+
+	}
+
+	public boolean buyFromExchange() {
+		// dummy method
+		return true;
 	}
 
 	public Root getBTCPrice() {
 		RestTemplate restTemplate = new RestTemplate();
-		ResponseEntity<Root[]> response = restTemplate.getForEntity("https://blox.weareblox.com/api/markets",
-				Root[].class);
+		ResponseEntity<Root[]> response = restTemplate.getForEntity("https://blox.weareblox.com/api/markets", Root[].class);
+//		ResponseEntity<Root[]> response = restTemplate.getForEntity("file:///home/davince/git/assessment/client-server/public/markets.json", Root[].class);
 		Root[] prices = response.getBody();
 		// Determine price
 		Root BTC = prices[0]; // a bit dirty..assume we have results
